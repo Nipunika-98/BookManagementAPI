@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using BookManagementAPI.Models;
 using BookManagementAPI.Data;
+using System.Linq;
 
 namespace BookManagementAPI.Controllers
 {
@@ -18,63 +19,80 @@ namespace BookManagementAPI.Controllers
 
         // Create/Edit
         [HttpPost]
-        public JsonResult CreateEdit(BookModel book
-            )
+        public ActionResult<BookModel> CreateEdit([FromBody] BookModel book)
         {
-            if(book.Id == 0)
+            if (book == null)
             {
-                _context.Books.Add(book);
-
-            }
-            else
-            {
-                var bookInDb = _context.Books.Find(book.Id);
-                if(bookInDb == null)
-                    return new JsonResult(NotFound());
-
-                bookInDb = book;
+                return BadRequest(new { message = "Book data cannot be null." });
             }
 
-            _context.SaveChanges();
+            try
+            {
+                if (book.Id == 0)
+                {
+                    // Creating a new record
+                    _context.Books.Add(book);
+                    _context.SaveChanges();
+                    return CreatedAtAction(nameof(Get), new { id = book.Id }, book); 
+                }
+                else
+                {
+                    // Updating an existing record
+                    var bookInDb = _context.Books.Find(book.Id);
+                    if (bookInDb == null)
+                    {
+                        return NotFound(new { message = $"Book with ID {book.Id} not found." });
+                    }
 
-            return new JsonResult(Ok(book));
+                    // Update properties
+                    bookInDb.Title = book.Title;
+                    bookInDb.Author = book.Author;
+                    bookInDb.Isbn = book.Isbn;
+                    bookInDb.PublicationDate = book.PublicationDate;
+                    _context.SaveChanges();
 
+                    return Ok(bookInDb); 
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An error occurred while processing your request.", error = ex.Message });
+            }
         }
 
-        // Get
-        [HttpGet]
-        public JsonResult Get(int id)
-        {
-            var result = _context.Books.Find(id);
-
-            if(result == null)
-                return new JsonResult(NotFound());
-
-            return new JsonResult(Ok(result));
-        }
-
-        // Delete
-        [HttpDelete] 
-        public JsonResult Delete(int id) 
+        // Get single book by ID
+        [HttpGet("{id}")]
+        public ActionResult<BookModel> Get(int id)
         {
             var result = _context.Books.Find(id);
 
             if (result == null)
-                return new JsonResult(NotFound());
+                return NotFound(new { message = $"Book with ID {id} not found." });
+
+            return Ok(result);
+        }
+
+        // Delete a book
+        [HttpDelete("{id}")]
+        public ActionResult Delete(int id)
+        {
+            var result = _context.Books.Find(id);
+
+            if (result == null)
+                return NotFound(new { message = $"Book with ID {id} not found." });
 
             _context.Books.Remove(result);
             _context.SaveChanges();
 
-            return new JsonResult(NoContent());
+            return NoContent(); 
         }
 
-        // Get all
-        [HttpGet()]
-        public JsonResult GetAll()
+        // Get all books
+        [HttpGet]
+        public ActionResult<IEnumerable<BookModel>> GetAll()
         {
             var result = _context.Books.ToList();
-
-            return new JsonResult(Ok(result));
+            return Ok(result); 
         }
     }
 }
